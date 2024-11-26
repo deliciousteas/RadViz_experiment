@@ -9,7 +9,7 @@ from sklearn.cluster import MeanShift
 3. 将结构保存为当前路径的csv文件。
 
 """
-csv_data_path = 'D:\\dzg\\040职业发展\\041phd\\042博士测试\\实验数据与文档\\PaperData-软件学报-iris-normalization.csv'
+csv_data_path = 'iris-normalization.csv'
 data = pd.read_csv(csv_data_path)
 data_array = data.values
 
