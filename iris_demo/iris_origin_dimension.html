@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <script src="https://d3js.org/d3.v4.min.js"></script>
+</head>
+
+
+<body>
+
+<script>
+d3.csv("../../../PaperData-软件学报-iris-normalization.csv", function(error, data) {
+    if (error) throw error;
+
+    
+    data.forEach(d => {
+        d.col1 = +d.col1; 
+        d.col2 = +d.col2;
+        d.col3 = +d.col3;
+        d.col4 = +d.col4;
+        d.classId = +d.classId; // 分类标签
+    });
+    console.log(data);
+    console.log(data[0]);
+    console.log(data[0].className);
+
+    // 提供Radviz排序的顺序数组
+    let radvizOrder = [];
+    let usedClusters = new Set();
+    radvizOrder = ["col1", "col2", "col3", "col4"]; 
+     // Radviz可视化排序
+     var width = 500, height = 500;
+    var outerRadius = Math.min(width, height) / 2;
+    var innerRadius = outerRadius - 50;
+
+    var svg = d3.select("body").append("svg")
+        .attr("width", width)
+        .attr("height", height)
+        .append("g")
+        .attr("transform", "translate(" + width / 2 + "," + height / 2 + ")");
+
+    var arc = d3.arc()
+        .innerRadius(innerRadius)
+        .outerRadius(outerRadius);
+
+    var pie = d3.pie()
+        .sort(null)
+        .value(function(d) { return 1; });
+
+    var arcs = svg.selectAll(".arc")
+        .data(pie(radvizOrder))
+        .enter().append("g")
+        .attr("class", "arc");
+
+    arcs.append("path")
+        .attr("d", arc)
+        .style("fill", function(d, i) { return d3.schemeCategory10[i % 10]; });
+
+    arcs.append("text")
+        .attr("transform", function(d) {
+            var _d = arc.centroid(d);
+            _d[0] *= 0.95;
+            _d[1] *= 0.95;
+            return "translate(" + _d + ")";
+        })
+        .attr("dy", ".50em")
+        .style("text-anchor", "middle")
+        .text(function(d, i) { return radvizOrder[i]; });
+
+    arcs.each(function(d) {
+        var centroid = arc.centroid(d);
+        console.log("Anchor point for slice " + d.data + ": " + centroid);
+    });
+
+    var classNames = Array.from(new Set(data.map(d => d.className)));
+    var colorScale = d3.scaleOrdinal(d3.schemeCategory10).domain(classNames);
+
+    var anchorPoints = arcs.data().map(d => arc.centroid(d));
+    console.log("Anchor points:", anchorPoints);
+
+    var nodes = data.map(d => ({
+        ...d,
+        x: 0,
+        y: 0
+    }));
+
+    var simulation = d3.forceSimulation(nodes)
+        .on('tick', ticked);
+
+    nodes.forEach(node => {
+        let forces = [];
+        radvizOrder.forEach((col, index) => {
+            forces.push({
+                x: anchorPoints[index][0],
+                y: anchorPoints[index][1],
+                strength: node[col] / 150
+            });
+        });
+
+        let totalStrength = forces.reduce((sum, force) => sum + force.strength, 0);
+        node.fx = forces.reduce((sum, force) => sum + force.x * force.strength, 0) / totalStrength;
+        node.fy = forces.reduce((sum, force) => sum + force.y * force.strength, 0) / totalStrength;
+    });
+
+    function ticked() {
+        var u = svg.selectAll('circle')
+            .data(nodes);
+
+        u.enter()
+            .append('circle')
+            .attr('r', 5)
+            .merge(u)
+            .attr('cx', d => d.x)
+            .attr('cy', d => d.y)
+            .style('fill', d => colorScale(d.className));
+
+        u.exit().remove();
+    }
+});
+
+function pearsonCorrelationCoefficientWithPadding(x, y) {
+    let maxLength = Math.max(x.length, y.length);
+    let xPadded = x.concat(new Array(maxLength - x.length).fill(0.5));
+    let yPadded = y.concat(new Array(maxLength - y.length).fill(0.5));
+
+    let meanX = xPadded.reduce((a, b) => a + b, 0) / maxLength;
+    let meanY = yPadded.reduce((a, b) => a + b, 0) / maxLength;
+
+    let numerator = xPadded.map((xi, i) => (xi - meanX) * (yPadded[i] - meanY)).reduce((a, b) => a + b, 0);
+    let denominator = Math.sqrt(
+        xPadded.map(xi => Math.pow(xi - meanX, 2)).reduce((a, b) => a + b, 0) *
+        yPadded.map(yi => Math.pow(yi - meanY, 2)).reduce((a, b) => a + b, 0)
+    );
+
+    return denominator === 0 ? 0 : numerator / denominator;
+};
+
+
+
+</script>
+</body>
+</html>

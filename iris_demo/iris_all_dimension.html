@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <script src="https://d3js.org/d3.v4.min.js"></script>
+</head>
+
+
+<body>
+
+<script>
+
+d3.csv("../../../col_all_result.csv", function(error, data) {
+    if (error) throw error;
+
+    
+    data.forEach(d => {
+        d.col1 = +d.col1; 
+        d.col2 = +d.col2;
+        d.col3 = +d.col3;
+        d.col4 = +d.col4;
+        d.classId = +d.classId; // 分类标签
+        d.cluster4_label = +d.cluster4_label; // 升维标签（根据维度）
+        d.cluster3_label = +d.cluster3_label;
+        d.cluster2_label = +d.cluster2_label;
+        d.cluster1_label = +d.cluster1_label;
+    });
+    console.log(data);
+    console.log(data[0]);
+    console.log(data[0].className);
+
+// 获取某一列的所有值，例如 cluster1_label
+var cluster1Labels = data.map(d => d.cluster1_label);
+var set_cluster1Labels = Array.from(new Set(cluster1Labels));
+
+var cluster2Labels = data.map(d => d.cluster2_label);
+var set_cluster2Labels = Array.from(new Set(cluster2Labels));
+
+var cluster3Labels = data.map(d => d.cluster3_label);
+var set_cluster3Labels = Array.from(new Set(cluster3Labels));
+
+var cluster4Labels = data.map(d => d.cluster4_label);
+var set_cluster4Labels = Array.from(new Set(cluster4Labels));
+
+//创建set_cluster1Labels.length个数组，逐行读取，如果cluster1Labels为0，则提取这一行的col1属性值到cluster1_0_array;
+//如果cluster1Labels为1，则提取这一行的col1属性值到cluster1_1_array,如果cluster1Labels为2，则提取这一行的col1属性值到cluster1_2_array,
+//按照升维整理数据
+var cluster1Arrays = [];
+for (var i = 0; i < set_cluster1Labels.length; i++) {
+    cluster1Arrays[i] = [];
+}
+
+data.forEach(d => {
+    var label = d.cluster1_label;
+    cluster1Arrays[label].push(d.col1);
+    
+});
+
+var cluster2Arrays = [];
+for (var i = 0; i < set_cluster2Labels.length; i++) {
+    cluster2Arrays[i] = [];
+}
+
+data.forEach(d => {
+    var label = d.cluster2_label;
+    cluster2Arrays[label].push(d.col2);
+    
+});
+
+var cluster3Arrays = [];
+for (var i = 0; i < set_cluster3Labels.length; i++) {
+    cluster3Arrays[i] = [];
+}
+
+data.forEach(d => {
+    var label = d.cluster3_label;
+    cluster3Arrays[label].push(d.col3);
+    
+});
+
+var cluster4Arrays = [];
+for (var i = 0; i < set_cluster4Labels.length; i++) {
+    cluster4Arrays[i] = [];
+}
+
+data.forEach(d => {
+    var label = d.cluster4_label;
+    cluster4Arrays[label].push(d.col4);
+    
+});
+
+
+console.log(set_cluster4Labels);
+console.log(cluster4Arrays);
+
+//对cluster4Arrays、cluster3Arrays、cluster2Arrays、cluster1Arrays四个中的所有数据以及他们彼此之间，逐个使用pearsonCorrelationCoefficientWithPadding来判断相关性，数据越正代表越相关，按皮尔逊系数由大到小输出console.log
+let allClusters = [cluster1Arrays, cluster2Arrays, cluster3Arrays, cluster4Arrays];
+let correlations = [];
+
+for (let i = 0; i < allClusters.length; i++) {
+    for (let j = i; j < allClusters.length; j++) {
+        for (let k = 0; k < allClusters[i].length; k++) {
+            for (let l = 0; l < allClusters[j].length; l++) {
+                let r = pearsonCorrelationCoefficientWithPadding(allClusters[i][k], allClusters[j][l]);
+                correlations.push({
+                    cluster1: `cluster${i + 1}_${k}`,
+                    cluster2: `cluster${j + 1}_${l}`,
+                    correlation: r
+                });
+            }
+        }
+    }
+}
+
+correlations.sort((a, b) => b.correlation - a.correlation);
+console.log(correlations);
+//
+// 基于皮尔逊系数较大、相似的放在一块，提供Radviz排序的顺序数组.
+let radvizOrder = [];
+let usedClusters = new Set();
+
+correlations.forEach(correlation => {
+    if (correlation.cluster1 !== correlation.cluster2 && correlation.correlation !== 1) {
+        if (!usedClusters.has(correlation.cluster1) && !usedClusters.has(correlation.cluster2)) {
+            radvizOrder.push(correlation.cluster1, correlation.cluster2);
+            usedClusters.add(correlation.cluster1);
+            usedClusters.add(correlation.cluster2);
+        } else if (!usedClusters.has(correlation.cluster1)) {
+            radvizOrder.push(correlation.cluster1);
+            usedClusters.add(correlation.cluster1);
+        } else if (!usedClusters.has(correlation.cluster2)) {
+            radvizOrder.push(correlation.cluster2);
+            usedClusters.add(correlation.cluster2);
+        }
+    }
+});
+
+console.log(radvizOrder);
+//Radviz可视化排序。基于D3.arc生成圆弧，要有innerRadius、OuterRadius差的厚度。然后根据radvizOrder的数组长度将圆弧均等分，并获取各分段圆弧的坐标，可视化各弧段的anchor point。
+var width = 500, height = 500;
+var outerRadius = Math.min(width, height) / 2;
+var innerRadius = outerRadius-50 ;
+
+var svg = d3.select("body").append("svg")
+    .attr("width", width)
+    .attr("height", height)
+    .append("g")
+    .attr("transform", "translate(" + width / 2 + "," + height / 2 + ")");
+
+var arc = d3.arc()
+    .innerRadius(innerRadius)
+    .outerRadius(outerRadius);
+
+var outerArc=d3.arc()
+    .innerRadius(innerRadius*0.9)
+    .outerRadius(outerRadius*0.9);
+
+var pie = d3.pie()
+    .sort(null)
+    .value(function(d) { return 1; });
+
+var arcs = svg.selectAll(".arc")
+    .data(pie(radvizOrder))
+    .enter().append("g")
+    .attr("class", "arc");
+
+arcs.append("path")
+    .attr("d", arc)
+    .style("fill", function(d, i) { return d3.schemeCategory10[i % 10]; });
+
+arcs.append("text")
+    .attr("transform", function(d) {
+        var _d = arc.centroid(d);
+        _d[0] *= 0.95;	//multiply by a constant factor
+        _d[1] *=0.95;	//multiply by a constant factor
+        return "translate(" + _d + ")";
+    })
+    .attr("dy", ".50em")
+    .style("text-anchor", "middle")
+    .text(function(d, i) { return radvizOrder[i]; });
+
+//how to get each slice's anchor points location in pie chart?
+arcs.each(function(d) {
+    var centroid = arc.centroid(d);
+    console.log("Anchor point for slice " + d.data + ": " + centroid);
+});
+
+//用set统计className下的类型，保存为新变量。然后对不同类型的node赋予不同的颜色。
+//记录下each slice's anchor points location in chart,保存为变量。
+//输入数据，逐行读取。每行数据为node，初始坐标为(0,0);
+//然后，获取每行的cluster1_label、cluster2_label、cluster3_label、cluster4_label的值，基于force-directed向对应的维度有坐标拉伸，例如cluster3_${cluster3_label}，沿着与cluster3_${cluster3_label}的anchor points坐标所在的连线上基于col3（col3只是举例，不同维度使用不一样）移动一定比例，其他dimension也是如此。
+// 用set统计className下的类型，保存为新变量。然后对不同类型的node赋予不同的颜色。
+var classNames = Array.from(new Set(data.map(d => d.className)));
+var colorScale = d3.scaleOrdinal(d3.schemeCategory10).domain(classNames);
+
+// 记录下each slice's anchor points location in chart,保存为变量。
+var anchorPoints = arcs.data().map(d => arc.centroid(d));
+console.log("Anchor points:", anchorPoints);
+
+// 输入数据，逐行读取。每行数据为node，初始坐标为(0,0);
+var nodes = data.map(d => ({
+    ...d,
+    x: 0,
+    y: 0
+}));
+
+// 创建力导向图
+// 然后，获取每行的cluster1_label、cluster2_label、cluster3_label、cluster4_label的值，基于force-directed向对应的维度有坐标拉伸，例如cluster3_${cluster3_label}，沿着与cluster3_${cluster3_label}的anchor points坐标所在的连线上基于col3（col3只是举例，不同维度使用不一样）移动一定比例，其他dimension也是如此。
+// 用set统计className下的类型，保存为新变量。然后对不同类型的node赋予不同的颜色。
+
+// strength是node和target之间的一维距离比例。
+var simulation = d3.forceSimulation(nodes)
+    
+    // 计算每个节点的力导向位置
+    nodes.forEach(node => {
+        let forces = [];
+        if (radvizOrder.includes(`cluster1_${node.cluster1_label}`)) {
+            let clusterIndex = radvizOrder.indexOf(`cluster1_${node.cluster1_label}`);
+            forces.push({
+                x: anchorPoints[clusterIndex][0],
+                y: anchorPoints[clusterIndex][1],
+                strength: node.col1 /150
+            });
+        }
+        if (radvizOrder.includes(`cluster2_${node.cluster2_label}`)) {
+            let clusterIndex = radvizOrder.indexOf(`cluster2_${node.cluster2_label}`);
+            forces.push({
+                x: anchorPoints[clusterIndex][0],
+                y: anchorPoints[clusterIndex][1],
+                strength: node.col2 / 150
+            });
+        }
+        if (radvizOrder.includes(`cluster3_${node.cluster3_label}`)) {
+            let clusterIndex = radvizOrder.indexOf(`cluster3_${node.cluster3_label}`);
+            forces.push({
+                x: anchorPoints[clusterIndex][0],
+                y: anchorPoints[clusterIndex][1],
+                strength: node.col3 / 150
+            });
+        }
+        // if (radvizOrder.includes(`cluster4_${node.cluster4_label}`)) {
+        //     let clusterIndex = radvizOrder.indexOf(`cluster4_${node.cluster4_label}`);
+        //     forces.push({
+        //         x: anchorPoints[clusterIndex][0],
+        //         y: anchorPoints[clusterIndex][1],
+        //         strength: node.col4 / 150
+        //     });
+        // }
+
+        // 计算最终位置
+        let totalStrength = forces.reduce((sum, force) => sum + force.strength, 0);
+        node.fx = forces.reduce((sum, force) => sum + force.x * force.strength, 0) / totalStrength;
+        node.fy = forces.reduce((sum, force) => sum + force.y * force.strength, 0) / totalStrength;
+    });
+    simulation.on('tick', ticked);
+
+function ticked() {
+    var u = svg.selectAll('circle')
+        .data(nodes);
+
+    u.enter()
+        .append('circle')
+        .attr('r', 4.5)
+        .merge(u)
+        .attr('cx', d => d.x)
+        .attr('cy', d => d.y)
+        .style('fill', d => colorScale(d.className));
+
+    u.exit().remove();
+}
+
+});
+
+
+function pearsonCorrelationCoefficientWithPadding(x, y) {
+    let maxLength = Math.max(x.length, y.length);
+    let xPadded = x.concat(new Array(maxLength - x.length).fill(0.5));
+    let yPadded = y.concat(new Array(maxLength - y.length).fill(0.5));
+
+    let n = xPadded.length;
+    let sumX = 0, sumY = 0, sumXY = 0, sumX2 = 0, sumY2 = 0;
+    let meanX = 0, meanY = 0;
+
+    // 计算平均值
+    for (let i = 0; i < n; i++) {
+        sumX += xPadded[i];
+        sumY += yPadded[i];
+    }
+    meanX = sumX / n;
+    meanY = sumY / n;
+
+    // 计算分子和分母
+    for (let i = 0; i < n; i++) {
+        let xDev = xPadded[i] - meanX;
+        let yDev = yPadded[i] - meanY;
+        sumXY += xDev * yDev;
+        sumX2 += xDev * xDev;
+        sumY2 += yDev * yDev;
+    }
+
+    let numerator = sumXY;
+    let denominator = Math.sqrt(sumX2 * sumY2);
+
+    // 计算皮尔逊相关系数
+    let r = numerator / denominator;
+
+    return r;
+}  
+
+
+
+</script>
+</body>
+</html>
