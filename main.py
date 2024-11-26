@@ -10,7 +10,7 @@ from yellowbrick.features import RadViz
 from pandas.plotting import radviz
 
 # 读取数据
-csv_data_path = 'D:\\dzg\\040职业发展\\041phd\\042博士测试\\实验数据与文档\\PaperData-软件学报-iris-normalization.csv'
+csv_data_path = 'iris-normalization.csv'
 data = pd.read_csv(csv_data_path)
 
 dimensions = ['col1', 'col2', 'col3', 'col4']
