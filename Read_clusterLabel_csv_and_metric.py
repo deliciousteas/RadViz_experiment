@@ -5,7 +5,7 @@ from sklearn.metrics import pairwise_distances
 from sklearn.metrics import accuracy_score
 from scipy.optimize import linear_sum_assignment
 # 读取数据
-csv_data_path = 'D:\\dzg\\040职业发展\\041phd\\042博士测试\\实验数据与文档\\PaperData-软件学报-iris-normalization.csv'
+csv_data_path = 'iris-normalization.csv'
 data = pd.read_csv(csv_data_path)
 data_array = data.values
 
